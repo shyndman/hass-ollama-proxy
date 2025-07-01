@@ -36,8 +36,6 @@ async def _forward_request(
     "Building forward request",
     full_path=full_path,
     method=request.method,
-    headers=dict(request.headers),
-    query_params=dict(request.query_params),
   )
 
   # Use pre-read body if available, otherwise stream
@@ -55,7 +53,7 @@ async def _forward_request(
 
   try:
     response = await client.send(req, stream=True)
-    log.debug("Received response", status_code=response.status_code, headers=dict(response.headers))
+    log.debug("Received response", status_code=response.status_code)
     return response
   except Exception as e:
     log.error(
@@ -82,7 +80,6 @@ def _filter_think_content(content: str, inside_think_block: bool) -> tuple[str, 
     "Filtering content",
     content_length=len(content),
     inside_think_block=inside_think_block,
-    content_preview=content[:100] + "..." if len(content) > 100 else content,
   )
 
   result = ""
@@ -154,40 +151,17 @@ async def _strip_think_tags_stream(response_stream: httpx.Response, request_id: 
         request_id=request_id,
         chunk_number=chunk_count,
         chunk_size=chunk_size,
-        total_bytes=bytes_processed,
-        chunk_preview=chunk[:50] if chunk else None,
       )
       buffer += chunk
-
-      # Debug: Log buffer state
-      log.debug(
-        "Buffer state", request_id=request_id, buffer_size=len(buffer), has_newline=b"\n" in buffer
-      )
 
       # Process complete lines
       while b"\n" in buffer:
         line, buffer = buffer.split(b"\n", 1)
         lines_processed += 1
 
-        log.debug(
-          "Processing line",
-          request_id=request_id,
-          line_number=lines_processed,
-          line_size=len(line),
-          remaining_buffer_size=len(buffer),
-        )
-
         try:
           decoded_line = line.decode("utf-8")
           json_data = json.loads(decoded_line)
-
-          log.debug(
-            "Parsed JSON",
-            request_id=request_id,
-            has_message="message" in json_data,
-            has_content="message" in json_data and "content" in json_data.get("message", {}),
-            done=json_data.get("done", False),
-          )
 
           # Process message content if present
           if "message" in json_data and "content" in json_data["message"]:
@@ -211,13 +185,6 @@ async def _strip_think_tags_stream(response_stream: httpx.Response, request_id: 
 
           try:
             yield output
-            log.debug(
-              "Yielded processed line",
-              request_id=request_id,
-              output_size=len(output),
-              is_final=json_data.get("done", False),
-              has_content=bool(json_data.get("message", {}).get("content")),
-            )
           except Exception as yield_error:
             log.error(
               "Error yielding output",
@@ -243,7 +210,6 @@ async def _strip_think_tags_stream(response_stream: httpx.Response, request_id: 
         "Processing remaining buffer",
         request_id=request_id,
         buffer_size=len(buffer),
-        buffer_content=buffer.decode("utf-8", errors="replace")[:100],
       )
 
       try:
@@ -342,11 +308,9 @@ async def chat_proxy(request: Request):
       try:
         body_json = json.loads(body)
         log.debug(
-          "Chat request body",
+          "Chat request",
           request_id=request_id,
           model=body_json.get("model"),
-          stream=body_json.get("stream", True),
-          message_count=len(body_json.get("messages", [])),
         )
       except json.JSONDecodeError:
         log.debug("Chat request body (non-JSON)", request_id=request_id, body_size=len(body))
@@ -359,26 +323,11 @@ async def chat_proxy(request: Request):
     try:
       resp = await _forward_request(request, "api/chat", client)
 
-      log.debug(
-        "Chat response received",
-        request_id=request_id,
-        status_code=resp.status_code,
-        content_type=resp.headers.get("content-type"),
-        transfer_encoding=resp.headers.get("transfer-encoding"),
-      )
-
       # Remove headers that can conflict with streaming
       headers_to_remove = {"content-length", "content-encoding", "transfer-encoding"}
       headers = {k: v for k, v in resp.headers.items() if k.lower() not in headers_to_remove}
       # Ensure we have chunked transfer encoding for streaming
       headers["transfer-encoding"] = "chunked"
-
-      log.debug(
-        "Starting streaming response",
-        request_id=request_id,
-        headers_count=len(headers),
-        headers=dict(headers),
-      )
 
       return StreamingResponse(
         _strip_think_tags_stream(resp, request_id),
