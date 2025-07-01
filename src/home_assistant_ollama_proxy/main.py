@@ -17,6 +17,12 @@ log = structlog.get_logger()
 log.info("Ollama proxy starting", ollama_url=OLLAMA_URL, log_level=level)
 
 
+@app.get("/health")
+async def health_check():
+  """Health check endpoint."""
+  return {"status": "healthy", "ollama_url": OLLAMA_URL}
+
+
 async def _forward_request(
   request: Request, full_path: str, client: httpx.AsyncClient
 ) -> httpx.Response:
