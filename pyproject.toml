@@ -5,15 +5,18 @@ description = "…"
 readme = "README.md"
 authors = [{name = "Scott Hyndman", email = "scotty.hyndman@gmail.com"}]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.14",
+    "httpx>=0.28.1",
+    "rich>=14.0.0",
+    "structlog>=25.4.0",
+    "uvicorn>=0.35.0",
+]
 license = {text = "MIT"}
 
 [project.urls]
 repository = "https://github.com/shyndman/home_assistant_ollama_proxy"
 "Bug Tracker" = "https://github.com/shyndman/home_assistant_ollama_proxy/issues"
-
-[project.scripts]
-home_assistant_ollama_proxy = "home_assistant_ollama_proxy:main"
 
 [build-system]
 requires = ["hatchling"]

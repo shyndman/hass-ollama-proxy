@@ -24,4 +24,4 @@ FROM python:3.13-slim
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
 # Run the application
-CMD ["/app/.venv/bin/home_assistant_ollama_proxy"]
+CMD ["uv", "run", "uvicorn", "home_assistant_ollama_proxy.main:app", "--host", "0.0.0.0", "--port", "8000"]
