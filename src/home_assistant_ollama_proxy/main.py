@@ -14,6 +14,8 @@ level = os.environ.get("LOG_LEVEL", "INFO").upper()
 structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(level))
 log = structlog.get_logger()
 
+log.info("Ollama proxy starting", ollama_url=OLLAMA_URL, log_level=level)
+
 
 async def _forward_request(
   request: Request, full_path: str, client: httpx.AsyncClient
