@@ -1,0 +1,10 @@
+# Changes here will be overwritten by Copier
+_commit: v0.0.4
+_src_path: /Users/scotthyndman/dev/projects/python-package-template
+github_user: shyndman
+module_name: home_assistant_ollama_proxy
+package_name: home-assistant-ollama-proxy
+project_name: Home Assistant Ollama Proxy
+python_version: '3.13'
+user_email: scotty.hyndman@gmail.com
+user_name: Scott Hyndman

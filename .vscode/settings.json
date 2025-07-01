@@ -1,0 +1,12 @@
+{
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.diagnosticsSource": "Pylance",
+  "python.analysis.enableAsyncProgram": false,
+  "python.analysis.languageServerMode": "full",
+  "python.analysis.logLevel": "Information",
+  "python.analysis.persistAllIndices": true,
+  "python.analysis.regenerateStdLibIndices": false,
+  "python.analysis.userFileIndexingLimit": 4000,
+  "python.languageServer": "Pylance",
+  "python.testing.pytestEnabled": true
+}
