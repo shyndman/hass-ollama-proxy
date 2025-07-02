@@ -179,20 +179,40 @@ async def _strip_think_tags_stream(response_stream: httpx.Response, request_id: 
                 filtered_length=len(filtered_content),
               )
 
-          # Always yield the JSON line, even if content is empty
-          # This maintains the streaming format expected by clients
-          output = json.dumps(json_data).encode("utf-8") + b"\n"
+          # Skip empty content messages when inside think blocks
+          # unless they contain important status information
+          should_yield = True
+          if inside_think_block and "message" in json_data:
+            # Only yield if done=true or content is non-empty
+            is_final = json_data.get("done", False)
+            has_content = bool(json_data.get("message", {}).get("content", "").strip())
+            should_yield = is_final or has_content
 
-          try:
-            yield output
-          except Exception as yield_error:
-            log.error(
-              "Error yielding output",
+          if should_yield:
+            output = json.dumps(json_data).encode("utf-8") + b"\n"
+
+            try:
+              yield output
+              log.debug(
+                "Yielded message",
+                request_id=request_id,
+                inside_think_block=inside_think_block,
+                is_final=json_data.get("done", False),
+                has_content=bool(json_data.get("message", {}).get("content", "").strip()),
+              )
+            except Exception as yield_error:
+              log.error(
+                "Error yielding output",
+                request_id=request_id,
+                error_type=type(yield_error).__name__,
+                error_message=str(yield_error),
+              )
+              raise
+          else:
+            log.debug(
+              "Skipped empty message during think block",
               request_id=request_id,
-              error_type=type(yield_error).__name__,
-              error_message=str(yield_error),
             )
-            raise
 
         except json.JSONDecodeError as e:
           log.warning(
