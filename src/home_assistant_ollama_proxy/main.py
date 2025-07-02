@@ -199,6 +199,12 @@ async def _strip_think_tags_stream(response_stream: httpx.Response, request_id: 
                 inside_think_block=inside_think_block,
                 is_final=json_data.get("done", False),
                 has_content=bool(json_data.get("message", {}).get("content", "").strip()),
+                message_content=json_data.get("message", {}).get("content", "")[:100] + "..."
+                if len(json_data.get("message", {}).get("content", "")) > 100
+                else json_data.get("message", {}).get("content", ""),
+                total_duration=json_data.get("total_duration"),
+                load_duration=json_data.get("load_duration"),
+                eval_count=json_data.get("eval_count"),
               )
             except Exception as yield_error:
               log.error(
@@ -240,9 +246,21 @@ async def _strip_think_tags_stream(response_stream: httpx.Response, request_id: 
           filtered_content, _ = _filter_think_content(original_content, inside_think_block)
           json_data["message"]["content"] = filtered_content
 
+        log.debug(
+          "Yielding final buffer message",
+          request_id=request_id,
+          is_final=json_data.get("done", False),
+          has_content=bool(json_data.get("message", {}).get("content", "").strip()),
+          message_content=json_data.get("message", {}).get("content", "")[:100] + "..."
+          if len(json_data.get("message", {}).get("content", "")) > 100
+          else json_data.get("message", {}).get("content", ""),
+        )
         yield json.dumps(json_data).encode("utf-8") + b"\n"
 
       except json.JSONDecodeError:
+        log.debug(
+          "Yielding non-JSON buffer content", request_id=request_id, buffer_size=len(buffer)
+        )
         yield buffer + b"\n"
 
   except httpx.ReadError as e:
@@ -328,10 +346,25 @@ async def chat_proxy(request: Request):
       try:
         body_json = json.loads(body)
         log.debug(
-          "Chat request",
+          "Chat request body",
           request_id=request_id,
           model=body_json.get("model"),
+          messages_count=len(body_json.get("messages", [])),
+          stream=body_json.get("stream", False),
+          options=body_json.get("options", {}),
         )
+        # Log messages content at debug level
+        for i, msg in enumerate(body_json.get("messages", [])):
+          log.debug(
+            "Chat message",
+            request_id=request_id,
+            message_index=i,
+            role=msg.get("role"),
+            content_length=len(msg.get("content", "")),
+            content_preview=msg.get("content", "")[:100] + "..."
+            if len(msg.get("content", "")) > 100
+            else msg.get("content", ""),
+          )
       except json.JSONDecodeError:
         log.debug("Chat request body (non-JSON)", request_id=request_id, body_size=len(body))
       # Store the body for later use in forward_request
@@ -342,6 +375,14 @@ async def chat_proxy(request: Request):
   async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
     try:
       resp = await _forward_request(request, "api/chat", client)
+
+      log.debug(
+        "Chat response received",
+        request_id=request_id,
+        status_code=resp.status_code,
+        content_type=resp.headers.get("content-type"),
+        headers={k: v for k, v in resp.headers.items() if k not in {"authorization", "api-key"}},
+      )
 
       # Remove headers that can conflict with streaming
       headers_to_remove = {"content-length", "content-encoding", "transfer-encoding"}
